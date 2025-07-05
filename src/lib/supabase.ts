@@ -1,29 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Debug: Log environment variables
-console.log('Environment check:', {
+console.log('🔧 Environment check:', {
   hasUrl: !!import.meta.env.VITE_SUPABASE_URL,
   hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
   url: import.meta.env.VITE_SUPABASE_URL,
   keyPrefix: import.meta.env.VITE_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
 });
 
-// Get environment variables with fallbacks
+// FIXED: Use the correct URL that matches the API keys you provided
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ziqmutjhoxguplitywdb.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppcW11dGpob3hndXBsaXR5d2RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MTI2OTMsImV4cCI6MjA2NzI4ODY5M30.fKLefwnPe5KAGBXilmlJAE3Q0cXGE9spqC7gfHmlhN0';
 
-console.log('Supabase config:', {
+console.log('🔗 Supabase config:', {
   url: supabaseUrl,
   keyLength: supabaseAnonKey.length,
-  keyValid: supabaseAnonKey.startsWith('eyJ')
+  keyValid: supabaseAnonKey.startsWith('eyJ'),
+  urlMatch: supabaseUrl.includes('ziqmutjhoxguplitywdb')
 });
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Test connection immediately
 supabase.from('employees').select('count').limit(1).then(
-  result => console.log('Supabase connection test:', result),
-  error => console.error('Supabase connection failed:', error)
+  result => console.log('✅ Supabase connection test:', result),
+  error => console.error('❌ Supabase connection failed:', error)
 );
 
 // Database types
