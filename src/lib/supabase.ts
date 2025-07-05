@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Use environment variables if available, otherwise fallback to correct values
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ziqmutjhoxguplitywdb.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppcW11dGpob3hndXBsaXR5d2RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MTI2OTMsImV4cCI6MjA2NzI4ODY5M30.fKLefwnPe5KAGBXilmlJAE3Q0cXGE9spqC7gfHmlhN0';
+// Use environment variables - no fallback to prevent using invalid keys
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+}
 
 console.log('Supabase URL:', supabaseUrl);
 console.log('Supabase Key (first 20 chars):', supabaseKey.substring(0, 20) + '...');
@@ -59,24 +63,28 @@ export const LATE_ARRIVAL_REASONS = [
 export const visitorAPI = {
   async getCheckedInVisitors(): Promise<Visitor[]> {
     try {
+      console.log('Fetching checked-in visitors...');
       const { data, error } = await supabase
         .from('visitors')
         .select(`
           *,
-          employees!visitors_person_to_meet_id_fkey(name)
+          employees(name)
         `)
         .eq('status', 'checked_in')
         .order('checked_in_at', { ascending: false });
     
       if (error) {
         console.error('Error fetching checked-in visitors:', error);
-        throw error;
+        // Return empty array instead of throwing to prevent UI crashes
+        return [];
       }
     
+      console.log('Raw visitor data:', data);
+      
       // Map the data to include person_to_meet from the joined employee data
       return (data || []).map(visitor => ({
         ...visitor,
-        person_to_meet: visitor.employees?.name || visitor.person_to_meet || 'Unknown'
+        person_to_meet: visitor.person_to_meet || 'Unknown'
       }));
     } catch (error) {
       console.error('Database connection error:', error);
@@ -95,12 +103,26 @@ export const visitorAPI = {
     try {
       console.log('Attempting to check in visitor:', visitor);
       
+      // Validate required fields
+      if (!visitor.full_name?.trim()) {
+        throw new Error('Full name is required');
+      }
+      if (!visitor.person_to_meet?.trim()) {
+        throw new Error('Person to meet is required');
+      }
+      if (!visitor.reason_to_visit?.trim()) {
+        throw new Error('Reason for visit is required');
+      }
+      if (!visitor.phone_number?.trim()) {
+        throw new Error('Phone number is required');
+      }
+
       const { data, error } = await supabase
         .from('visitors')
         .insert([{
           full_name: visitor.full_name,
-          person_to_meet_id: visitor.person_to_meet_id || null,
           person_to_meet: visitor.person_to_meet,
+          person_to_meet_id: visitor.person_to_meet_id || null,
           reason_to_visit: visitor.reason_to_visit,
           phone_number: visitor.phone_number,
           photo_url: visitor.photo_url,
