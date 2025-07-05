@@ -87,6 +87,7 @@ export const visitorAPI = {
   async checkInVisitor(visitor: {
     full_name: string;
     person_to_meet_id: string;
+    person_to_meet: string;
     reason_to_visit: string;
     phone_number: string;
     photo_url?: string;
@@ -99,6 +100,7 @@ export const visitorAPI = {
         .insert([{
           full_name: visitor.full_name,
           person_to_meet_id: visitor.person_to_meet_id,
+          person_to_meet: visitor.person_to_meet,
           reason_to_visit: visitor.reason_to_visit,
           phone_number: visitor.phone_number,
           photo_url: visitor.photo_url,

@@ -12,6 +12,7 @@
          full_name: formData.full_name,
          phone_number: formData.phone_number,
          person_to_meet_id: formData.person_to_meet_id,
+        person_to_meet: formData.person_to_meet,
          reason_to_visit: reason,
          photo_url: photoUrl
        });
