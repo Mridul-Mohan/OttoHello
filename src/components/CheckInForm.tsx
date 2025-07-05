@@ -22,25 +22,11 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onBack, photoUrl, onSu
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [syncingSlack, setSyncingSlack] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
 
   const reasons = [
     'Meeting', 'Interview', 'Delivery', 'Maintenance', 'Sales Visit', 'Others'
   ];
-
-  const handleSyncSlack = async () => {
-    setSyncingSlack(true);
-    try {
-      await employeeAPI.syncSlackEmployees();
-      alert('Slack employees synced successfully!');
-    } catch (error) {
-      console.error('Error syncing Slack employees:', error);
-      alert('Failed to sync Slack employees. Please try again.');
-    } finally {
-      setSyncingSlack(false);
-    }
-  };
 
   const handleEmployeeChange = async (value: string) => {
     setFormData(prev => ({ ...prev, person_to_meet: value, person_to_meet_id: '' }));
@@ -208,18 +194,8 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onBack, photoUrl, onSu
           {/* Step 1: Person to Meet */}
           {currentStep === 1 && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center mb-4">
-                <label className="block text-sm font-medium text-blue-200">Person to Meet *</label>
-                <button
-                  type="button"
-                  onClick={handleSyncSlack}
-                  disabled={syncingSlack}
-                  className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors disabled:opacity-50"
-                >
-                  {syncingSlack ? 'Syncing...' : 'Sync Slack'}
-                </button>
-              </div>
               <div className="relative">
+                <label className="block text-sm font-medium text-blue-200 mb-2">Person to Meet *</label>
                 <input
                   type="text"
                   required
