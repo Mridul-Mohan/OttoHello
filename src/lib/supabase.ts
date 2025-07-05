@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Use environment variables if available, otherwise fallback to correct values
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ziqmutjhoxguplitywdb.supabase.co';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppcW11dGpob3hndXBsaXR5d2RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MTI2OTMsImV4cCI6MjA2NzI4ODY5M30.fKLefwnPe5KAGBXilmlJAE3Q0cXGE9spqC7gfHmlhN0';
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables');
-}
+console.log('Supabase URL:', supabaseUrl);
+console.log('Supabase Key (first 20 chars):', supabaseKey.substring(0, 20) + '...');
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -206,6 +206,7 @@ export const employeeAPI = {
 
   async syncSlackEmployees(): Promise<void> {
     try {
+      console.log('Starting Slack sync...');
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-slack-employees`, {
         method: 'POST',
         headers: {
@@ -215,11 +216,14 @@ export const employeeAPI = {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to sync Slack employees');
+        const errorText = await response.text();
+        console.error('Sync response error:', errorText);
+        throw new Error(`Failed to sync Slack employees: ${response.status} ${errorText}`);
       }
 
       const result = await response.json();
       console.log('Slack sync result:', result);
+      return result;
     } catch (error) {
       console.error('Error syncing Slack employees:', error);
       throw error;
