@@ -99,7 +99,7 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onBack, photoUrl, onSu
 
   const steps = [
     { title: 'Personal Info', icon: User, fields: ['full_name', 'phone_number'] },
-    { title: 'Meeting Details', icon: Users, fields: ['person_to_meet_id'] },
+    { title: 'Meeting Details', icon: Users, fields: ['person_to_meet'] },
     { title: 'Visit Reason', icon: MessageCircle, fields: ['reason_to_visit'] }
   ];
 
@@ -107,6 +107,9 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onBack, photoUrl, onSu
   const isCurrentStepValid = currentFields.every(field => {
     if (field === 'reason_to_visit' && formData.reason_to_visit === 'Others') {
       return formData.custom_reason.trim() !== '';
+    }
+    if (field === 'person_to_meet') {
+      return formData.person_to_meet.trim() !== '';
     }
     return (formData as any)[field]?.trim?.() !== '';
   });
