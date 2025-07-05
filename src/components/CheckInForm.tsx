@@ -17,6 +17,7 @@
          photo_url: photoUrl
        });
 
+      console.log('Check-in successful, calling onSuccess');
        onSuccess();
      } catch (error) {
        console.error('Error checking in visitor:', error);

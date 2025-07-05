@@ -204,6 +204,27 @@ export const employeeAPI = {
     return data || [];
   },
 
+  async syncSlackEmployees(): Promise<void> {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-slack-employees`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to sync Slack employees');
+      }
+
+      const result = await response.json();
+      console.log('Slack sync result:', result);
+    } catch (error) {
+      console.error('Error syncing Slack employees:', error);
+      throw error;
+    }
+  },
   async recordLateArrival(arrival: {
     employee_name: string;
     reporting_manager: string;
