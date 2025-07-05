@@ -1,14 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Get environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Debug: Log environment variables
+console.log('Environment check:', {
+  hasUrl: !!import.meta.env.VITE_SUPABASE_URL,
+  hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+  url: import.meta.env.VITE_SUPABASE_URL,
+  keyPrefix: import.meta.env.VITE_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
+});
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please check your .env file.');
-}
+// Get environment variables with fallbacks
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ziqmutjhoxguplitywdb.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppcW11dGpob3hndXBsaXR5d2RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MTI2OTMsImV4cCI6MjA2NzI4ODY5M30.fKLefwnPe5KAGBXilmlJAE3Q0cXGE9spqC7gfHmlhN0';
+
+console.log('Supabase config:', {
+  url: supabaseUrl,
+  keyLength: supabaseAnonKey.length,
+  keyValid: supabaseAnonKey.startsWith('eyJ')
+});
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Test connection immediately
+supabase.from('employees').select('count').limit(1).then(
+  result => console.log('Supabase connection test:', result),
+  error => console.error('Supabase connection failed:', error)
+);
 
 // Database types
 export interface Visitor {
@@ -42,6 +58,7 @@ export interface Employee {
   department?: string;
   is_manager: boolean;
   created_at: string;
+  slack_id?: string;
 }
 
 // Late arrival reasons enum
@@ -60,7 +77,8 @@ export const LATE_ARRIVAL_REASONS = [
 export const visitorAPI = {
   async getCheckedInVisitors(): Promise<Visitor[]> {
     try {
-      console.log('Fetching checked-in visitors...');
+      console.log('🔍 Fetching checked-in visitors...');
+      
       const { data, error } = await supabase
         .from('visitors')
         .select(`
@@ -71,20 +89,18 @@ export const visitorAPI = {
         .order('checked_in_at', { ascending: false });
     
       if (error) {
-        console.error('Error fetching checked-in visitors:', error);
-        // Return empty array instead of throwing to prevent UI crashes
+        console.error('❌ Error fetching checked-in visitors:', error);
         return [];
       }
     
-      console.log('Raw visitor data:', data);
+      console.log('✅ Raw visitor data:', data);
       
-      // Map the data to include person_to_meet from the joined employee data
       return (data || []).map(visitor => ({
         ...visitor,
         person_to_meet: visitor.person_to_meet || 'Unknown'
       }));
     } catch (error) {
-      console.error('Database connection error:', error);
+      console.error('💥 Database connection error:', error);
       return [];
     }
   },
@@ -98,60 +114,70 @@ export const visitorAPI = {
     photo_url?: string;
   }): Promise<void> {
     try {
-      console.log('Attempting to check in visitor:', visitor);
+      console.log('🚀 Attempting to check in visitor:', visitor);
       
       // Validate required fields
-      if (!visitor.full_name?.trim()) {
-        throw new Error('Full name is required');
+      const validationErrors = [];
+      if (!visitor.full_name?.trim()) validationErrors.push('Full name is required');
+      if (!visitor.person_to_meet?.trim()) validationErrors.push('Person to meet is required');
+      if (!visitor.reason_to_visit?.trim()) validationErrors.push('Reason for visit is required');
+      if (!visitor.phone_number?.trim()) validationErrors.push('Phone number is required');
+
+      if (validationErrors.length > 0) {
+        throw new Error(validationErrors.join(', '));
       }
-      if (!visitor.person_to_meet?.trim()) {
-        throw new Error('Person to meet is required');
-      }
-      if (!visitor.reason_to_visit?.trim()) {
-        throw new Error('Reason for visit is required');
-      }
-      if (!visitor.phone_number?.trim()) {
-        throw new Error('Phone number is required');
-      }
+
+      const insertData = {
+        full_name: visitor.full_name.trim(),
+        person_to_meet: visitor.person_to_meet.trim(),
+        person_to_meet_id: visitor.person_to_meet_id || null,
+        reason_to_visit: visitor.reason_to_visit.trim(),
+        phone_number: visitor.phone_number.trim(),
+        photo_url: visitor.photo_url || null,
+        checked_in_at: new Date().toISOString(),
+        status: 'checked_in'
+      };
+
+      console.log('📝 Insert data:', insertData);
 
       const { data, error } = await supabase
         .from('visitors')
-        .insert([{
-          full_name: visitor.full_name,
-          person_to_meet: visitor.person_to_meet,
-          person_to_meet_id: visitor.person_to_meet_id || null,
-          reason_to_visit: visitor.reason_to_visit,
-          phone_number: visitor.phone_number,
-          photo_url: visitor.photo_url,
-          checked_in_at: new Date().toISOString(),
-          status: 'checked_in'
-        }])
+        .insert([insertData])
         .select();
     
       if (error) {
-        console.error('Error checking in visitor:', error);
-        throw error;
+        console.error('❌ Error checking in visitor:', error);
+        throw new Error(`Check-in failed: ${error.message}`);
       }
       
-      console.log('Visitor checked in successfully:', data);
+      console.log('✅ Visitor checked in successfully:', data);
     } catch (error) {
-      console.error('Database connection error during check-in:', error);
+      console.error('💥 Database connection error during check-in:', error);
       throw error;
     }
   },
 
   async checkOutVisitor(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('visitors')
-      .update({ 
-        status: 'checked_out',
-        checked_out_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
+    try {
+      console.log('🚪 Checking out visitor:', id);
+      
+      const { error } = await supabase
+        .from('visitors')
+        .update({ 
+          status: 'checked_out',
+          checked_out_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
     
-    if (error) {
-      console.error('Error checking out visitor:', error);
+      if (error) {
+        console.error('❌ Error checking out visitor:', error);
+        throw error;
+      }
+      
+      console.log('✅ Visitor checked out successfully');
+    } catch (error) {
+      console.error('💥 Error during checkout:', error);
       throw error;
     }
   },
@@ -160,110 +186,137 @@ export const visitorAPI = {
     const today = new Date().toISOString().split('T')[0];
     
     try {
-      const { data: checkedIn, error: checkedInError } = await supabase
-        .from('visitors')
-        .select('id')
-        .eq('status', 'checked_in');
+      console.log('📊 Fetching visitor stats for:', today);
+      
+      const [checkedInResult, totalTodayResult] = await Promise.all([
+        supabase.from('visitors').select('id').eq('status', 'checked_in'),
+        supabase.from('visitors').select('id')
+          .gte('created_at', `${today}T00:00:00.000Z`)
+          .lt('created_at', `${today}T23:59:59.999Z`)
+      ]);
 
-      const { data: totalToday, error: totalTodayError } = await supabase
-        .from('visitors')
-        .select('id')
-        .gte('created_at', `${today}T00:00:00.000Z`)
-        .lt('created_at', `${today}T23:59:59.999Z`);
-
-      if (checkedInError) {
-        console.error('Error fetching checked-in count:', checkedInError);
-        throw checkedInError;
+      if (checkedInResult.error) {
+        console.error('❌ Error fetching checked-in count:', checkedInResult.error);
+        throw checkedInResult.error;
       }
       
-      if (totalTodayError) {
-        console.error('Error fetching today\'s total:', totalTodayError);
-        throw totalTodayError;
+      if (totalTodayResult.error) {
+        console.error('❌ Error fetching today\'s total:', totalTodayResult.error);
+        throw totalTodayResult.error;
       }
 
-      return {
-        currentlyCheckedIn: checkedIn?.length || 0,
-        totalToday: totalToday?.length || 0
+      const stats = {
+        currentlyCheckedIn: checkedInResult.data?.length || 0,
+        totalToday: totalTodayResult.data?.length || 0
       };
+      
+      console.log('✅ Visitor stats:', stats);
+      return stats;
     } catch (error) {
-      console.error('Error getting visitor stats:', error);
-      return {
-        currentlyCheckedIn: 0,
-        totalToday: 0
-      };
+      console.error('💥 Error getting visitor stats:', error);
+      return { currentlyCheckedIn: 0, totalToday: 0 };
     }
   }
 };
 
 export const employeeAPI = {
   async getEmployees(): Promise<Employee[]> {
-    const { data, error } = await supabase
-      .from('employees')
-      .select('*')
-      .order('name');
+    try {
+      console.log('👥 Fetching all employees...');
+      
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .order('name');
     
-    if (error) {
-      console.error('Error fetching employees:', error);
+      if (error) {
+        console.error('❌ Error fetching employees:', error);
+        throw error;
+      }
+      
+      console.log('✅ Employees fetched:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('💥 Error in getEmployees:', error);
       throw error;
     }
-    return data || [];
+  },
+
+  async searchEmployees(searchTerm: string): Promise<Employee[]> {
+    try {
+      console.log('🔍 Searching employees for:', searchTerm);
+      
+      if (!searchTerm?.trim()) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, name, role, department')
+        .ilike('name', `%${searchTerm.trim()}%`)
+        .limit(8);
+
+      if (error) {
+        console.error('❌ Employee search failed:', error);
+        throw error;
+      }
+
+      console.log('✅ Employee search results:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('💥 Error searching employees:', error);
+      throw error;
+    }
   },
 
   async getManagers(): Promise<Employee[]> {
-    const { data, error } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('is_manager', true)
-      .order('name');
-    
-    if (error) {
-      console.error('Error fetching managers:', error);
-      throw error;
-    }
-    return data || [];
-  },
-
-  async syncSlackEmployees(): Promise<void> {
     try {
-      console.log('Starting Slack sync...');
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-slack-employees`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Sync response error:', errorText);
-        throw new Error(`Failed to sync Slack employees: ${response.status} ${errorText}`);
+      console.log('👔 Fetching managers...');
+      
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('is_manager', true)
+        .order('name');
+    
+      if (error) {
+        console.error('❌ Error fetching managers:', error);
+        throw error;
       }
-
-      const result = await response.json();
-      console.log('Slack sync result:', result);
-      return result;
+      
+      console.log('✅ Managers fetched:', data?.length || 0);
+      return data || [];
     } catch (error) {
-      console.error('Error syncing Slack employees:', error);
+      console.error('💥 Error in getManagers:', error);
       throw error;
     }
   },
+
   async recordLateArrival(arrival: {
     employee_name: string;
     reporting_manager: string;
     reason_for_lateness: string;
   }): Promise<void> {
-    const { error } = await supabase
-      .from('late_arrivals')
-      .insert([{
-        employee_name: arrival.employee_name,
-        reporting_manager: arrival.reporting_manager,
-        reason_for_lateness: arrival.reason_for_lateness,
-        check_in_time: new Date().toISOString()
-      }]);
+    try {
+      console.log('⏰ Recording late arrival:', arrival);
+      
+      const { error } = await supabase
+        .from('late_arrivals')
+        .insert([{
+          employee_name: arrival.employee_name,
+          reporting_manager: arrival.reporting_manager,
+          reason_for_lateness: arrival.reason_for_lateness,
+          check_in_time: new Date().toISOString()
+        }]);
     
-    if (error) {
-      console.error('Error recording late arrival:', error);
+      if (error) {
+        console.error('❌ Error recording late arrival:', error);
+        throw error;
+      }
+      
+      console.log('✅ Late arrival recorded successfully');
+    } catch (error) {
+      console.error('💥 Error in recordLateArrival:', error);
       throw error;
     }
   }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, User, Users, MessageCircle, Send } from 'lucide-react';
-import { supabase, visitorAPI, employeeAPI } from '../lib/supabase';
+import { employeeAPI, visitorAPI } from '../lib/supabase';
 import type { Employee } from '../lib/supabase';
 
 interface CheckInFormProps {
@@ -23,44 +23,52 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onBack, photoUrl, onSu
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const reasons = [
     'Meeting', 'Interview', 'Delivery', 'Maintenance', 'Sales Visit', 'Others'
   ];
 
   const handleEmployeeChange = async (value: string) => {
+    console.log('🔍 Employee search input:', value);
+    
     setFormData(prev => ({ ...prev, person_to_meet: value, person_to_meet_id: '' }));
 
-    if (!value) {
+    if (!value?.trim()) {
       setFilteredEmployees([]);
       setShowEmployeeDropdown(false);
       return;
     }
 
+    if (value.length < 2) {
+      console.log('⏳ Search term too short, waiting...');
+      return;
+    }
+
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, name, role, department')
-        .ilike('name', `%${value}%`)
-        .limit(8);
-
-      if (error) {
-        console.error('Employee search failed:', error);
-        setFilteredEmployees([]);
-        setShowEmployeeDropdown(false);
-        return;
-      }
-
-      setFilteredEmployees(data || []);
-      setShowEmployeeDropdown((data || []).length > 0);
+      setSearchLoading(true);
+      console.log('🚀 Starting employee search...');
+      
+      const employees = await employeeAPI.searchEmployees(value);
+      
+      console.log('✅ Search completed, results:', employees.length);
+      setFilteredEmployees(employees);
+      setShowEmployeeDropdown(employees.length > 0);
     } catch (error) {
-      console.error('Error searching employees:', error);
+      console.error('❌ Employee search error:', error);
       setFilteredEmployees([]);
       setShowEmployeeDropdown(false);
+      
+      // Show user-friendly error
+      alert(`Search failed: ${error.message || 'Please try again'}`);
+    } finally {
+      setSearchLoading(false);
     }
   };
 
   const selectEmployee = (employee: Employee) => {
+    console.log('👤 Selected employee:', employee);
+    
     setFormData(prev => ({
       ...prev,
       person_to_meet: employee.name,
@@ -71,27 +79,49 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onBack, photoUrl, onSu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    console.log('📝 Form submission started with data:', formData);
+    
+    // Client-side validation
+    const validationErrors = [];
+    if (!formData.full_name.trim()) validationErrors.push('Full name is required');
+    if (!formData.phone_number.trim()) validationErrors.push('Phone number is required');
+    if (!formData.person_to_meet.trim()) validationErrors.push('Person to meet is required');
+    if (!formData.reason_to_visit.trim()) validationErrors.push('Reason for visit is required');
+    if (formData.reason_to_visit === 'Others' && !formData.custom_reason.trim()) {
+      validationErrors.push('Please specify your custom reason');
+    }
+    
+    if (validationErrors.length > 0) {
+      alert(validationErrors.join('\n'));
+      return;
+    }
+    
     setLoading(true);
 
     try {
       const reason = formData.reason_to_visit === 'Others'
-        ? formData.custom_reason
+        ? formData.custom_reason.trim()
         : formData.reason_to_visit;
 
-      await visitorAPI.checkInVisitor({
-        full_name: formData.full_name,
-        phone_number: formData.phone_number,
-        person_to_meet_id: formData.person_to_meet_id,
-        person_to_meet: formData.person_to_meet,
+      const visitorData = {
+        full_name: formData.full_name.trim(),
+        phone_number: formData.phone_number.trim(),
+        person_to_meet: formData.person_to_meet.trim(),
+        person_to_meet_id: formData.person_to_meet_id || undefined,
         reason_to_visit: reason,
         photo_url: photoUrl
-      });
+      };
 
-      console.log('Check-in successful, calling onSuccess');
+      console.log('🚀 Submitting visitor check-in:', visitorData);
+      
+      await visitorAPI.checkInVisitor(visitorData);
+
+      console.log('✅ Check-in successful, calling onSuccess');
       onSuccess();
     } catch (error) {
-      console.error('Error checking in visitor:', error);
-      alert('Failed to check in. Please try again.');
+      console.error('❌ Check-in failed:', error);
+      alert(`Check-in failed: ${error.message || 'Please try again'}`);
     } finally {
       setLoading(false);
     }
@@ -199,14 +229,21 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onBack, photoUrl, onSu
             <div className="space-y-4">
               <div className="relative">
                 <label className="block text-sm font-medium text-blue-200 mb-2">Person to Meet *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.person_to_meet}
-                  onChange={e => handleEmployeeChange(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-800/50 backdrop-blur-sm border border-blue-500/30 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Start typing employee name..."
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={formData.person_to_meet}
+                    onChange={e => handleEmployeeChange(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-800/50 backdrop-blur-sm border border-blue-500/30 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Start typing employee name (min 2 characters)..."
+                  />
+                  {searchLoading && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
+                    </div>
+                  )}
+                </div>
 
                 {showEmployeeDropdown && filteredEmployees.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-slate-800/90 backdrop-blur-sm border border-blue-500/30 rounded-lg shadow-xl max-h-48 overflow-y-auto">
@@ -215,14 +252,23 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onBack, photoUrl, onSu
                         key={emp.id}
                         type="button"
                         onClick={() => selectEmployee(emp)}
-                        className="w-full px-4 py-3 text-left hover:bg-blue-700/30 flex items-center justify-between"
+                        className="w-full px-4 py-3 text-left hover:bg-blue-700/30 flex items-center justify-between transition-colors"
                       >
                         <div>
                           <div className="text-white font-medium">{emp.name}</div>
-                          <div className="text-blue-300 text-sm">{emp.role} • {emp.department}</div>
+                          <div className="text-blue-300 text-sm">
+                            {emp.role && emp.department ? `${emp.role} • ${emp.department}` : 
+                             emp.role || emp.department || 'Employee'}
+                          </div>
                         </div>
                       </button>
                     ))}
+                  </div>
+                )}
+                
+                {formData.person_to_meet.length >= 2 && !searchLoading && filteredEmployees.length === 0 && (
+                  <div className="mt-2 text-yellow-400 text-sm">
+                    No employees found. You can still proceed with the name you entered.
                   </div>
                 )}
               </div>
