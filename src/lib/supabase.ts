@@ -1,16 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Debug: Log environment variables
-console.log('🔧 Environment check:', {
-  hasUrl: !!import.meta.env.VITE_SUPABASE_URL,
-  hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-  url: import.meta.env.VITE_SUPABASE_URL,
-  keyPrefix: import.meta.env.VITE_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
-});
-
-// FIXED: Use the correct URL that matches the API keys you provided
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ziqmutjhoxguplitywdb.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppcW11dGpob3hndXBsaXR5d2RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MTI2OTMsImV4cCI6MjA2NzI4ODY5M30.fKLefwnPe5KAGBXilmlJAE3Q0cXGE9spqC7gfHmlhN0';
+// FIXED: Use the correct URL and API key that match your project
+const supabaseUrl = 'https://ziqmutjhoxguplitywdb.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppcW11dGpob3hndXBsaXR5d2RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MTI2OTMsImV4cCI6MjA2NzI4ODY5M30.fKLefwnPe5KAGBXilmlJAE3Q0cXGE9spqC7gfHmlhN0';
 
 console.log('🔗 Supabase config:', {
   url: supabaseUrl,
