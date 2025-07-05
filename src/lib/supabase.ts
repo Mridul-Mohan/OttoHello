@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Use environment variables if available, otherwise fallback to hardcoded values
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://stflympvteenocxmvjdj.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0Zmx5bXB2dGVlbm9jeG12amRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MDQ4ODMsImV4cCI6MjA2NzI4MDg4M30.ZGQoRxHK1yNAAA-4dQPtNxXV_dexi1t5YjrYxXEKrV0';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -55,25 +58,30 @@ export const LATE_ARRIVAL_REASONS = [
 // API functions
 export const visitorAPI = {
   async getCheckedInVisitors(): Promise<Visitor[]> {
-    const { data, error } = await supabase
-      .from('visitors')
-      .select(`
-        *,
-        employees!visitors_person_to_meet_id_fkey(name)
-      `)
-      .eq('status', 'checked_in')
-      .order('checked_in_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('visitors')
+        .select(`
+          *,
+          employees!visitors_person_to_meet_id_fkey(name)
+        `)
+        .eq('status', 'checked_in')
+        .order('checked_in_at', { ascending: false });
     
-    if (error) {
-      console.error('Error fetching checked-in visitors:', error);
-      throw error;
+      if (error) {
+        console.error('Error fetching checked-in visitors:', error);
+        throw error;
+      }
+    
+      // Map the data to include person_to_meet from the joined employee data
+      return (data || []).map(visitor => ({
+        ...visitor,
+        person_to_meet: visitor.employees?.name || visitor.person_to_meet || 'Unknown'
+      }));
+    } catch (error) {
+      console.error('Database connection error:', error);
+      return [];
     }
-    
-    // Map the data to include person_to_meet from the joined employee data
-    return (data || []).map(visitor => ({
-      ...visitor,
-      person_to_meet: visitor.employees?.name || visitor.person_to_meet || 'Unknown'
-    }));
   },
 
   async checkInVisitor(visitor: {
@@ -83,20 +91,30 @@ export const visitorAPI = {
     phone_number: string;
     photo_url?: string;
   }): Promise<void> {
-    const { error } = await supabase
-      .from('visitors')
-      .insert([{
-        full_name: visitor.full_name,
-        person_to_meet_id: visitor.person_to_meet_id,
-        reason_to_visit: visitor.reason_to_visit,
-        phone_number: visitor.phone_number,
-        photo_url: visitor.photo_url,
-        checked_in_at: new Date().toISOString(),
-        status: 'checked_in'
-      }]);
+    try {
+      console.log('Attempting to check in visitor:', visitor);
+      
+      const { data, error } = await supabase
+        .from('visitors')
+        .insert([{
+          full_name: visitor.full_name,
+          person_to_meet_id: visitor.person_to_meet_id,
+          reason_to_visit: visitor.reason_to_visit,
+          phone_number: visitor.phone_number,
+          photo_url: visitor.photo_url,
+          checked_in_at: new Date().toISOString(),
+          status: 'checked_in'
+        }])
+        .select();
     
-    if (error) {
-      console.error('Error checking in visitor:', error);
+      if (error) {
+        console.error('Error checking in visitor:', error);
+        throw error;
+      }
+      
+      console.log('Visitor checked in successfully:', data);
+    } catch (error) {
+      console.error('Database connection error during check-in:', error);
       throw error;
     }
   },
